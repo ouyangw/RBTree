@@ -13,7 +13,7 @@
 #else
 #include <boost/scoped_ptr.hpp>
 #endif
-namespace utility
+namespace rbtree
 {
 template <typename DataType>
 class RBTree
@@ -359,5 +359,5 @@ int dfs_build_printtree_offset(PrintNode<DataType> *ptr, int padding)
 } // anonymous namespace
 
 
-} // namespace utility
+} // namespace rbtree
 #endif
