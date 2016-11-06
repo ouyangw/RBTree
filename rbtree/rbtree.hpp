@@ -26,6 +26,8 @@ public:
   void insert(const DataType &data);
   // print the data to string
   std::string to_string() const;
+  // check red black tree invariances (just for debugging)
+  bool check_rbtree_invariances() const;
 
 private:
   struct Node_;
@@ -237,6 +239,51 @@ std::string RBTree<DataType>::to_string() const
   }
 
   return ss.str();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+bool RBTree<DataType>::check_rbtree_invariances() const
+{
+  if (!m_root)
+    return true;
+  if (m_root->color != Black)
+    return false;
+  // depth first search to verify black heights
+  typedef std::pair<Node_ *, int> pair_type;
+  typedef std::vector<pair_type> dfs_stack_type;
+  Node_ *ptr(m_root.get());
+  dfs_stack_type stack;
+  int tmp_height(1);
+  // first, calculate a height
+  while (ptr->left) {
+    if (ptr->right)
+      stack.push_back(pair_type(ptr->right.get(), tmp_height));
+    ptr = ptr->left.get();
+    if (ptr->color == Black)
+      ++tmp_height;
+  }
+  const int black_height(tmp_height);
+  // second, compare other heights with this one
+  while (!stack.empty()) {
+    ptr = stack.back().first;
+    int current_height(stack.back().second);
+    if (ptr->color == Black)
+      ++current_height;
+    stack.pop_back();
+    while (ptr->left) {
+      if (ptr->right)
+        stack.push_back(pair_type(ptr->right.get(), current_height));
+      ptr = ptr->left.get();
+      if (ptr->color == Black)
+        ++current_height;
+    }
+    if (current_height != black_height)
+      return false;
+  }
+
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

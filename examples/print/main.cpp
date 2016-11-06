@@ -19,5 +19,9 @@ int main()
   tree.insert(-3);
   tree.insert(-4);
   std::cout << tree.to_string() << '\n';
+  if (tree.check_rbtree_invariances())
+    std::cout << "Tree is good.\n";
+  else
+    std::cout << "Tree is broken!\n";
   return 0;
 }
