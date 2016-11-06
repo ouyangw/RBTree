@@ -3,7 +3,7 @@
 
 int main()
 {
-  utility::RBTree<int> tree;
+  rbtree::RBTree<int> tree;
   tree.insert(1);
   tree.insert(5);
   tree.insert(2);
