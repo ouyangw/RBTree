@@ -180,30 +180,27 @@ std::string RBTree<DataType>::to_string() const
   Node_ *ptr(m_root.get());
   UPtrLocal root(new PrintNodeLocal(ptr->data, ptr->color));
   PrintNodeLocal *local_ptr(root.get());
-  dfs_stack_type vec;
-  vec.push_back(pair_type(ptr, local_ptr));
-  do {
-    while (ptr->left) {
+  dfs_stack_type dfs_stack;
+  while (true) {
+    while (true) {
+      if (ptr->right) {
+        local_ptr->right.reset(
+            new PrintNodeLocal(ptr->right->data, ptr->right->color));
+        dfs_stack.push_back(
+            pair_type(ptr->right.get(), local_ptr->right.get()));
+      }
+      if (!ptr->left)
+        break;
       ptr = ptr->left.get();
       local_ptr->left.reset(new PrintNodeLocal(ptr->data, ptr->color));
       local_ptr = local_ptr->left.get();
-      vec.push_back(pair_type(ptr, local_ptr));
     }
-    while (!ptr->right) {
-      vec.pop_back();
-      if (vec.empty())
-        break;
-      ptr = vec.back().first;
-      local_ptr = vec.back().second;
-    }
-    if (vec.empty())
+    if (dfs_stack.empty())
       break;
-    vec.pop_back();
-    ptr = ptr->right.get();
-    local_ptr->right.reset(new PrintNodeLocal(ptr->data, ptr->color));
-    local_ptr = local_ptr->right.get();
-    vec.push_back(pair_type(ptr, local_ptr));
-  } while (!vec.empty());
+    ptr = dfs_stack.back().first;
+    local_ptr = dfs_stack.back().second;
+    dfs_stack.pop_back();
+  }
 
   // build offsets
   dfs_build_printtree_offset(root.get(), 0);
