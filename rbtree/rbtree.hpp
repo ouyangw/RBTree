@@ -257,9 +257,11 @@ bool RBTree<DataType>::check_rbtree_invariances() const
   dfs_stack_type stack;
   int tmp_height(1);
   // first, calculate a height
-  while (ptr->left) {
+  while (true) {
     if (ptr->right)
       stack.push_back(pair_type(ptr->right.get(), tmp_height));
+    if (!ptr->left)
+      break;
     ptr = ptr->left.get();
     if (ptr->color == Black)
       ++tmp_height;
@@ -272,9 +274,11 @@ bool RBTree<DataType>::check_rbtree_invariances() const
     if (ptr->color == Black)
       ++current_height;
     stack.pop_back();
-    while (ptr->left) {
+    while (true) {
       if (ptr->right)
         stack.push_back(pair_type(ptr->right.get(), current_height));
+      if (!ptr->left)
+        break;
       ptr = ptr->left.get();
       if (ptr->color == Black)
         ++current_height;
