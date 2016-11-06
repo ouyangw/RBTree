@@ -7,17 +7,18 @@
 #include <iomanip>
 #include <algorithm>
 #include <cassert>
-#if __cplusplus > 201100L
 #include <memory>
+#if __cplusplus > 201100L
 #define RBTREE_CXX11
-#else
-#include <boost/scoped_ptr.hpp>
 #endif
 namespace utility
 {
 template <typename DataType>
 class RBTree
 {
+public:
+  enum Color { Red, Black };
+
 public:
   // insert data
   void insert(const DataType &data);
@@ -27,29 +28,35 @@ public:
 private:
   struct Node_;
 #ifdef RBTREE_CXX11
-  using UPtr = std::unique_ptr<Node_>;
+  using UPtr_ = std::unique_ptr<Node_>;
 #else
-  typedef boost::scoped_ptr<Node_> UPtr;
+  typedef std::auto_ptr<Node_> UPtr_;
 #endif
   struct Node_ {
     DataType data;
     Node_ *parent;
-    UPtr left, right;
+    UPtr_ left, right;
+    Color color;
 
     Node_(const DataType &d, Node_ *p)
         : data(d)
         , parent(p)
         , left()
         , right()
+        , color(Red)
     {
     }
   };
 
 private:
-  UPtr m_root;
+  UPtr_ m_root;
 
 private:
-  Node_ *find_insert_parent(const DataType &data) const;
+  Node_ *find_insert_parent_(const DataType &data) const;
+  Node_ *get_grandparent_(Node_ *ptr) const;
+  Node_ *get_uncle_(Node_ *ptr) const;
+  void rotate_right_(Node_ *ptr);
+  void rotate_left_(Node_ *ptr);
 };
 
 namespace
@@ -59,17 +66,25 @@ struct PrintNode {
 #ifdef RBTREE_CXX11
   using UPtr = std::unique_ptr<PrintNode>;
 #else
-  typedef boost::scoped_ptr<PrintNode> UPtr;
+  typedef std::auto_ptr<PrintNode> UPtr;
 #endif
+  typedef RBTree<DataType> tree_type;
+  typedef typename tree_type::Color color_type;
   const DataType &data;
+  int color_code;
   UPtr left, right;
   int offset;
-  PrintNode(const DataType &d)
+  PrintNode(const DataType &d, color_type color)
       : data(d)
+      , color_code(-1)
       , left()
       , right()
       , offset(0)
   {
+    if (color == tree_type::Red)
+      color_code = 1;
+    else if (color == tree_type::Black)
+      color_code = 0;
   }
 };
 
@@ -88,16 +103,61 @@ int dfs_build_printtree_offset(PrintNode<DataType> *ptr, int padding);
 template <typename DataType>
 void RBTree<DataType>::insert(const DataType &data)
 {
-  if (!m_root)
+  if (m_root.get() == NULL) {
     m_root.reset(new Node_(data, NULL));
-  else {
-    Node_ *ptr(find_insert_parent(data));
+    m_root->color = Black;
+  } else {
+    Node_ *ptr(find_insert_parent_(data));
     if (ptr->data == data)
       return;
-    else if (ptr->data < data)
+    else if (ptr->data < data) {
       ptr->right.reset(new Node_(data, ptr));
-    else
+      ptr = ptr->right.get();
+    }
+    else {
       ptr->left.reset(new Node_(data, ptr));
+      ptr = ptr->left.get();
+    }
+
+    // fix the tree
+    while (ptr) {
+      // red propagated to the root
+      if (ptr->parent == NULL) {
+        ptr->color = Black;
+        break;
+      }
+      // parent is black, done
+      if (ptr->parent->color == Black)
+        break;
+      Node_ *gp(get_grandparent_(ptr)), *uncle(get_uncle_(ptr));
+      assert(gp != NULL);
+      Node_ *parent(ptr->parent);
+      // uncle is red, flip color and propagate red to grandparant
+      if (uncle != NULL && uncle->color == Red) {
+        uncle->color = parent->color = Black;
+        gp->color = Red;
+        ptr = gp;
+      }
+      // otherwise, rotate twice to fix
+      else {
+        if (gp->left.get() == parent) {
+          if (ptr == parent->right.get()) {
+            rotate_left_(parent);
+            std::swap(ptr, parent);
+          }
+          rotate_right_(gp);
+          std::swap(parent->color, gp->color);
+        } else {
+          if (ptr == parent->left.get()) {
+            rotate_right_(parent);
+            std::swap(ptr, parent);
+          }
+          rotate_left_(gp);
+          std::swap(parent->color, gp->color);
+        }
+        break;
+      }
+    }
   }
 }
 
@@ -106,7 +166,7 @@ void RBTree<DataType>::insert(const DataType &data)
 template <typename DataType>
 std::string RBTree<DataType>::to_string() const
 {
-  if (!m_root)
+  if (m_root.get() == NULL)
     return "";
   typedef PrintNode<DataType> PrintNodeLocal;
   typedef std::pair<Node_ *, PrintNodeLocal *> pair_type;
@@ -114,18 +174,18 @@ std::string RBTree<DataType>::to_string() const
   typedef std::vector<pair_type> dfs_stack_type;
   // depth first search build
   Node_ *ptr(m_root.get());
-  UPtrLocal root(new PrintNodeLocal(ptr->data));
+  UPtrLocal root(new PrintNodeLocal(ptr->data, ptr->color));
   PrintNodeLocal *local_ptr(root.get());
   dfs_stack_type vec;
   vec.push_back(pair_type(ptr, local_ptr));
   do {
-    while (ptr->left) {
+    while (ptr->left.get() != NULL) {
       ptr = ptr->left.get();
-      local_ptr->left.reset(new PrintNodeLocal(ptr->data));
+      local_ptr->left.reset(new PrintNodeLocal(ptr->data, ptr->color));
       local_ptr = local_ptr->left.get();
       vec.push_back(pair_type(ptr, local_ptr));
     }
-    while (!ptr->right) {
+    while (ptr->right.get() == NULL) {
       vec.pop_back();
       if (vec.empty())
         break;
@@ -136,7 +196,7 @@ std::string RBTree<DataType>::to_string() const
       break;
     vec.pop_back();
     ptr = ptr->right.get();
-    local_ptr->right.reset(new PrintNodeLocal(ptr->data));
+    local_ptr->right.reset(new PrintNodeLocal(ptr->data, ptr->color));
     local_ptr = local_ptr->right.get();
     vec.push_back(pair_type(ptr, local_ptr));
   } while (!vec.empty());
@@ -159,14 +219,15 @@ std::string RBTree<DataType>::to_string() const
     for (queue_iter_type it(queues[queue_idx1].begin());
          it != queues[queue_idx1].end(); ++it) {
       const PrintNodeLocal &pn(**it);
-      if (pn.left)
+      if (pn.left.get() != NULL)
         queues[queue_idx2].push_back(pn.left.get());
-      if (pn.right)
+      if (pn.right.get() != NULL)
         queues[queue_idx2].push_back(pn.right.get());
       assert(pn.offset >= current_offset);
       if (pn.offset > current_offset)
         ss << std::string((pn.offset - current_offset) * half_print_width, ' ');
-      ss << std::setw(2 * half_print_width) << pn.data;
+      ss << std::setw(2 * half_print_width - 2) << pn.data 
+         << ',' << pn.color_code;
       current_offset = pn.offset + 2;
     }
     queues[queue_idx1].clear();
@@ -180,25 +241,102 @@ std::string RBTree<DataType>::to_string() const
 
 template <typename DataType>
 typename RBTree<DataType>::Node_ *
-RBTree<DataType>::find_insert_parent(const DataType &data) const
+RBTree<DataType>::find_insert_parent_(const DataType &data) const
 {
-  if (!m_root)
+  if (m_root.get() == NULL)
     return NULL;
   Node_ *ptr(m_root.get());
   while (true) {
     if (ptr->data == data)
       return ptr;
     if (ptr->data > data) {
-      if (ptr->left)
+      if (ptr->left.get() != NULL)
         ptr = ptr->left.get();
       else
         return ptr;
     } else {
-      if (ptr->right)
+      if (ptr->right.get() != NULL)
         ptr = ptr->right.get();
       else
         return ptr;
     }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+typename RBTree<DataType>::Node_ *
+RBTree<DataType>::get_grandparent_(Node_ *ptr) const
+{
+  if (ptr != NULL && ptr->parent != NULL)
+    return ptr->parent->parent;
+  else
+    return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+typename RBTree<DataType>::Node_ *
+RBTree<DataType>::get_uncle_(Node_ *ptr) const
+{
+  Node_ *grandparent(get_grandparent_(ptr));
+  if (grandparent == NULL)
+    return NULL;
+  if (grandparent->left.get() == ptr->parent)
+    return grandparent->right.get();
+  else
+    return grandparent->left.get();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+void RBTree<DataType>::rotate_left_(Node_ *ptr)
+{
+  UPtr_ right_uptr(ptr->right.release());
+  ptr->right.reset(right_uptr->left.release());
+  right_uptr->left.reset(ptr);
+  Node_ *parent(ptr->parent);
+  ptr->parent = right_uptr.get();
+  right_uptr->parent = parent;
+  if (parent != NULL) {
+    if (parent->left.get() == ptr) {
+      parent->left.release();
+      parent->left.reset(right_uptr.release());
+    } else {
+      parent->right.release();
+      parent->right.reset(right_uptr.release());
+    }
+  } else {
+    m_root.release();
+    m_root.reset(right_uptr.release());
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+void RBTree<DataType>::rotate_right_(Node_ *ptr)
+{
+  UPtr_ left_uptr(ptr->left.release());
+  ptr->left.reset(left_uptr->right.release());
+  left_uptr->right.reset(ptr);
+  Node_ *parent(ptr->parent);
+  ptr->parent = left_uptr.get();
+  left_uptr->parent = parent;
+  if (parent != NULL) {
+    if (parent->left.get() == ptr) {
+      parent->left.release();
+      parent->left.reset(left_uptr.release());
+    } else {
+      parent->right.release();
+      parent->right.reset(left_uptr.release());
+    }
+  } else {
+    m_root.release();
+    m_root.reset(left_uptr.release());
   }
 }
 
@@ -214,9 +352,9 @@ template <typename DataType>
 int dfs_build_printtree_offset(PrintNode<DataType> *ptr, int padding)
 {
   int left_width(1), right_width(1);
-  if (ptr->left)
+  if (ptr->left.get() != NULL)
     left_width = dfs_build_printtree_offset(ptr->left.get(), padding);
-  if (ptr->right)
+  if (ptr->right.get() != NULL)
     right_width =
         dfs_build_printtree_offset(ptr->right.get(), left_width + padding);
   ptr->offset = padding + left_width - 1;
