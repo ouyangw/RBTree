@@ -356,6 +356,8 @@ void RBTree<DataType>::rotate_left_(Node_ *ptr)
   ptr->right.swap(right_ptr->left);
   ptr->parent = right_ptr;
   right_ptr->parent = parent;
+  if (ptr->right)
+    ptr->right->parent = ptr;
   UPtr_ *uptr_ptr(&m_root);
   if (parent != NULL) {
     if (parent->left.get() == ptr)
@@ -378,6 +380,8 @@ void RBTree<DataType>::rotate_right_(Node_ *ptr)
   ptr->left.swap(left_ptr->right);
   ptr->parent = left_ptr;
   left_ptr->parent = parent;
+  if (ptr->left)
+    ptr->left->parent = ptr;
   UPtr_ *uptr_ptr(&m_root);
   if (parent != NULL) {
     if (parent->left.get() == ptr)
