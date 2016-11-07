@@ -252,17 +252,21 @@ bool RBTree<DataType>::check_rbtree_invariances() const
   typedef std::vector<pair_type> dfs_stack_type;
   Node_ *ptr(m_root.get());
   dfs_stack_type stack;
-  int tmp_height(1);
+  int tmp_height(1), checkpoint_height(-1);
   // first, calculate a height
   while (true) {
     if (ptr->right)
       stack.push_back(pair_type(ptr->right.get(), tmp_height));
+    else if (checkpoint_height == -1)
+      checkpoint_height = tmp_height;
     if (!ptr->left)
       break;
     ptr = ptr->left.get();
     if (ptr->color == Black)
       ++tmp_height;
   }
+  if (checkpoint_height != tmp_height)
+    return false;
   const int black_height(tmp_height);
   // second, compare other heights with this one
   while (!stack.empty()) {
