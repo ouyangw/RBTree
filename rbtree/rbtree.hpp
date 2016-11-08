@@ -1,17 +1,19 @@
 #ifndef RBTREE_HPP
 #define RBTREE_HPP
-#include <string>
-#include <sstream>
-#include <utility>
-#include <vector>
-#include <iomanip>
 #include <algorithm>
 #include <cassert>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 #if __cplusplus > 201100L
 #include <memory>
 #define RBTREE_CXX11
+#define RBTREE_NOEXCEPT noexcept
 #else
 #include <boost/scoped_ptr.hpp>
+#define RBTREE_NOEXCEPT throw()
 #endif
 namespace rbtree
 {
@@ -23,15 +25,15 @@ public:
 
 public:
   // insert data
-  void insert(const DataType &data);
+  void insert(const DataType &data) RBTREE_NOEXCEPT;
   // remove data
-  void remove(const DataType &data);
+  void remove(const DataType &data) RBTREE_NOEXCEPT;
   // find if the data is in the tree
-  bool find(const DataType &data) const;
+  bool find(const DataType &data) const RBTREE_NOEXCEPT;
   // print the data to string
-  std::string to_string() const;
+  std::string to_string() const RBTREE_NOEXCEPT;
   // check red black tree invariances (just for debugging)
-  bool check_rbtree_invariances() const;
+  bool check_rbtree_invariances() const RBTREE_NOEXCEPT;
 
 private:
   struct Node_;
@@ -46,16 +48,15 @@ private:
     UPtr_ left, right;
     Color color;
 
-    Node_(const DataType &d, Node_ *p)
-        : data(d)
-        , parent(p)
-        , left()
-        , right()
-        , color(Red)
+    Node_(const DataType &d, Node_ *p) RBTREE_NOEXCEPT : data(d),
+                                                         parent(p),
+                                                         left(),
+                                                         right(),
+                                                         color(Red)
     {
     }
 
-    void swap(Node_ &rhs)
+    void swap(Node_ &rhs) RBTREE_NOEXCEPT
     {
       std::swap(parent, rhs.parent);
       left.swap(rhs.left);
@@ -76,47 +77,48 @@ private:
   UPtr_ m_root;
 
 private:
-  Node_ *find_insert_parent_(const DataType &data) const;
-  Node_ *get_grandparent_(Node_ *ptr) const;
-  Node_ *get_uncle_(Node_ *ptr) const;
-  void rotate_right_(Node_ *ptr);
-  void rotate_left_(Node_ *ptr);
-  Node_ *find_predecessor(Node_ *ptr) const;
-  Node_ *find_successor(Node_ *ptr) const;
-  void swap_nodes_(Node_ *lhs_ptr, Node_ *rhs_ptr);
+  Node_ *find_insert_parent_(const DataType &data) const RBTREE_NOEXCEPT;
+  Node_ *get_grandparent_(Node_ *ptr) const RBTREE_NOEXCEPT;
+  Node_ *get_uncle_(Node_ *ptr) const RBTREE_NOEXCEPT;
+  void rotate_right_(Node_ *ptr) RBTREE_NOEXCEPT;
+  void rotate_left_(Node_ *ptr) RBTREE_NOEXCEPT;
+  Node_ *find_predecessor(Node_ *ptr) const RBTREE_NOEXCEPT;
+  Node_ *find_successor(Node_ *ptr) const RBTREE_NOEXCEPT;
+  void swap_nodes_(Node_ *lhs_ptr, Node_ *rhs_ptr) RBTREE_NOEXCEPT;
 };
 
 namespace
 {
-template <typename DataType>
-struct PrintNode {
+  template <typename DataType>
+  struct PrintNode {
 #ifdef RBTREE_CXX11
-  using UPtr = std::unique_ptr<PrintNode>;
+    using UPtr = std::unique_ptr<PrintNode>;
 #else
-  typedef boost::scoped_ptr<PrintNode> UPtr;
+    typedef boost::scoped_ptr<PrintNode> UPtr;
 #endif
-  typedef RBTree<DataType> tree_type;
-  typedef typename tree_type::Color color_type;
-  const DataType &data;
-  int color_code;
-  UPtr left, right;
-  int offset;
-  PrintNode(const DataType &d, color_type color)
-      : data(d)
-      , color_code(-1)
-      , left()
-      , right()
-      , offset(0)
-  {
-    if (color == tree_type::Red)
-      color_code = 1;
-    else if (color == tree_type::Black)
-      color_code = 0;
-  }
-};
+    typedef RBTree<DataType> tree_type;
+    typedef typename tree_type::Color color_type;
+    const DataType &data;
+    int color_code;
+    UPtr left, right;
+    int offset;
+    PrintNode(const DataType &d, color_type color) RBTREE_NOEXCEPT
+        : data(d),
+          color_code(-1),
+          left(),
+          right(),
+          offset(0)
+    {
+      if (color == tree_type::Red)
+        color_code = 1;
+      else if (color == tree_type::Black)
+        color_code = 0;
+    }
+  };
 
-template <typename DataType>
-int dfs_build_printtree_offset(PrintNode<DataType> *ptr, int padding);
+  template <typename DataType>
+  int dfs_build_printtree_offset(PrintNode<DataType> *ptr,
+                                 int padding) RBTREE_NOEXCEPT;
 } // anonymous namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +130,7 @@ int dfs_build_printtree_offset(PrintNode<DataType> *ptr, int padding);
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-void RBTree<DataType>::insert(const DataType &data)
+void RBTree<DataType>::insert(const DataType &data) RBTREE_NOEXCEPT
 {
   if (!m_root) {
     m_root.reset(new Node_(data, NULL));
@@ -140,8 +142,7 @@ void RBTree<DataType>::insert(const DataType &data)
     else if (ptr->data < data) {
       ptr->right.reset(new Node_(data, ptr));
       ptr = ptr->right.get();
-    }
-    else {
+    } else {
       ptr->left.reset(new Node_(data, ptr));
       ptr = ptr->left.get();
     }
@@ -191,7 +192,7 @@ void RBTree<DataType>::insert(const DataType &data)
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-void RBTree<DataType>::remove(const DataType &data)
+void RBTree<DataType>::remove(const DataType &data) RBTREE_NOEXCEPT
 {
   Node_ *ptr(find_insert_parent_(data));
   if (ptr->data != data)
@@ -322,7 +323,7 @@ void RBTree<DataType>::remove(const DataType &data)
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-bool RBTree<DataType>::find(const DataType &data) const
+bool RBTree<DataType>::find(const DataType &data) const RBTREE_NOEXCEPT
 {
   Node_ *ptr(find_insert_parent_(data));
   if (ptr->data == data)
@@ -334,7 +335,7 @@ bool RBTree<DataType>::find(const DataType &data) const
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-std::string RBTree<DataType>::to_string() const
+std::string RBTree<DataType>::to_string() const RBTREE_NOEXCEPT
 {
   if (!m_root)
     return "";
@@ -393,8 +394,8 @@ std::string RBTree<DataType>::to_string() const
       assert(pn.offset >= current_offset);
       if (pn.offset > current_offset)
         ss << std::string((pn.offset - current_offset) * half_print_width, ' ');
-      ss << std::setw(2 * half_print_width - 2) << pn.data
-         << ',' << pn.color_code;
+      ss << std::setw(2 * half_print_width - 2) << pn.data << ','
+         << pn.color_code;
       current_offset = pn.offset + 2;
     }
     queues[queue_idx1].clear();
@@ -407,7 +408,7 @@ std::string RBTree<DataType>::to_string() const
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-bool RBTree<DataType>::check_rbtree_invariances() const
+bool RBTree<DataType>::check_rbtree_invariances() const RBTREE_NOEXCEPT
 {
   if (!m_root)
     return true;
@@ -460,8 +461,8 @@ bool RBTree<DataType>::check_rbtree_invariances() const
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-typename RBTree<DataType>::Node_ *
-RBTree<DataType>::find_insert_parent_(const DataType &data) const
+typename RBTree<DataType>::Node_ *RBTree<DataType>::find_insert_parent_(
+    const DataType &data) const RBTREE_NOEXCEPT
 {
   if (!m_root)
     return NULL;
@@ -487,7 +488,7 @@ RBTree<DataType>::find_insert_parent_(const DataType &data) const
 
 template <typename DataType>
 typename RBTree<DataType>::Node_ *
-RBTree<DataType>::get_grandparent_(Node_ *ptr) const
+RBTree<DataType>::get_grandparent_(Node_ *ptr) const RBTREE_NOEXCEPT
 {
   if (ptr != NULL && ptr->parent != NULL)
     return ptr->parent->parent;
@@ -499,7 +500,7 @@ RBTree<DataType>::get_grandparent_(Node_ *ptr) const
 
 template <typename DataType>
 typename RBTree<DataType>::Node_ *
-RBTree<DataType>::get_uncle_(Node_ *ptr) const
+RBTree<DataType>::get_uncle_(Node_ *ptr) const RBTREE_NOEXCEPT
 {
   Node_ *grandparent(get_grandparent_(ptr));
   if (grandparent == NULL)
@@ -513,7 +514,7 @@ RBTree<DataType>::get_uncle_(Node_ *ptr) const
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-void RBTree<DataType>::rotate_left_(Node_ *ptr)
+void RBTree<DataType>::rotate_left_(Node_ *ptr) RBTREE_NOEXCEPT
 {
   Node_ *right_ptr(ptr->right.get());
   if (right_ptr == NULL)
@@ -537,7 +538,7 @@ void RBTree<DataType>::rotate_left_(Node_ *ptr)
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-void RBTree<DataType>::rotate_right_(Node_ *ptr)
+void RBTree<DataType>::rotate_right_(Node_ *ptr) RBTREE_NOEXCEPT
 {
   Node_ *left_ptr(ptr->left.get());
   if (left_ptr == NULL)
@@ -562,7 +563,7 @@ void RBTree<DataType>::rotate_right_(Node_ *ptr)
 
 template <typename DataType>
 typename RBTree<DataType>::Node_ *
-RBTree<DataType>::find_predecessor(Node_ *ptr) const
+RBTree<DataType>::find_predecessor(Node_ *ptr) const RBTREE_NOEXCEPT
 {
   if (!ptr->left)
     return NULL;
@@ -576,7 +577,7 @@ RBTree<DataType>::find_predecessor(Node_ *ptr) const
 
 template <typename DataType>
 typename RBTree<DataType>::Node_ *
-RBTree<DataType>::find_successor(Node_ *ptr) const
+RBTree<DataType>::find_successor(Node_ *ptr) const RBTREE_NOEXCEPT
 {
   if (!ptr->right)
     return NULL;
@@ -589,7 +590,8 @@ RBTree<DataType>::find_successor(Node_ *ptr) const
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
-void RBTree<DataType>::swap_nodes_(Node_ *lhs_ptr, Node_ *rhs_ptr)
+void RBTree<DataType>::swap_nodes_(Node_ *lhs_ptr,
+                                   Node_ *rhs_ptr) RBTREE_NOEXCEPT
 {
   Node_ *lhs_parent(lhs_ptr->parent), *rhs_parent(rhs_ptr->parent);
   UPtr_ *lhs_uptr_ptr(NULL), *rhs_uptr_ptr(NULL);
@@ -622,20 +624,20 @@ void RBTree<DataType>::swap_nodes_(Node_ *lhs_ptr, Node_ *rhs_ptr)
 
 namespace
 {
-template <typename DataType>
-int dfs_build_printtree_offset(PrintNode<DataType> *ptr, int padding)
-{
-  int left_width(1), right_width(1);
-  if (ptr->left)
-    left_width = dfs_build_printtree_offset(ptr->left.get(), padding);
-  if (ptr->right)
-    right_width =
-        dfs_build_printtree_offset(ptr->right.get(), left_width + padding);
-  ptr->offset = padding + left_width - 1;
-  return left_width + right_width;
-}
+  template <typename DataType>
+  int dfs_build_printtree_offset(PrintNode<DataType> *ptr,
+                                 int padding) RBTREE_NOEXCEPT
+  {
+    int left_width(1), right_width(1);
+    if (ptr->left)
+      left_width = dfs_build_printtree_offset(ptr->left.get(), padding);
+    if (ptr->right)
+      right_width =
+          dfs_build_printtree_offset(ptr->right.get(), left_width + padding);
+    ptr->offset = padding + left_width - 1;
+    return left_width + right_width;
+  }
 } // anonymous namespace
-
 
 } // namespace rbtree
 #endif
