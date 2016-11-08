@@ -24,6 +24,8 @@ public:
 public:
   // insert data
   void insert(const DataType &data);
+  // remove data
+  void remove(const DataType &data);
   // print the data to string
   std::string to_string() const;
   // check red black tree invariances (just for debugging)
@@ -50,6 +52,22 @@ private:
         , color(Red)
     {
     }
+
+    void swap(Node_ &rhs)
+    {
+      std::swap(parent, rhs.parent);
+      left.swap(rhs.left);
+      right.swap(rhs.right);
+      std::swap(color, rhs.color);
+      if (left)
+        left->parent = this;
+      if (right)
+        right->parent = this;
+      if (rhs.left)
+        rhs.left->parent = &rhs;
+      if (rhs.right)
+        rhs.right->parent = &rhs;
+    }
   };
 
 private:
@@ -61,6 +79,9 @@ private:
   Node_ *get_uncle_(Node_ *ptr) const;
   void rotate_right_(Node_ *ptr);
   void rotate_left_(Node_ *ptr);
+  Node_ *find_predecessor(Node_ *ptr) const;
+  Node_ *find_successor(Node_ *ptr) const;
+  void swap_nodes_(Node_ *lhs_ptr, Node_ *rhs_ptr);
 };
 
 namespace
@@ -168,6 +189,137 @@ void RBTree<DataType>::insert(const DataType &data)
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename DataType>
+void RBTree<DataType>::remove(const DataType &data)
+{
+  Node_ *ptr(find_insert_parent_(data));
+  if (ptr->data != data)
+    return;
+  UPtr_ child_uptr;
+  Node_ *replacement_ptr(find_predecessor(ptr));
+  if (replacement_ptr == NULL) {
+    replacement_ptr = find_successor(ptr);
+    if (replacement_ptr != NULL)
+      child_uptr.swap(replacement_ptr->right);
+  } else
+    child_uptr.swap(replacement_ptr->left);
+
+  // swap if not NULL
+  if (replacement_ptr != NULL) {
+    swap_nodes_(ptr, replacement_ptr);
+  }
+  // if root only, remove it
+  else if (ptr == m_root.get()) {
+    m_root.reset();
+    return;
+  }
+
+  UPtr_ *self_uptr_ptr(NULL);
+  Node_ *parent_ptr(ptr->parent), *sibling_ptr(NULL);
+  bool is_sibling_on_the_right(true);
+  // find the relation with the new parent
+  if (parent_ptr->left.get() == ptr) {
+    self_uptr_ptr = &ptr->parent->left;
+    sibling_ptr = parent_ptr->right.get();
+  } else {
+    self_uptr_ptr = &ptr->parent->right;
+    sibling_ptr = parent_ptr->left.get();
+    is_sibling_on_the_right = false;
+  }
+
+  Node_ *self_ptr(self_uptr_ptr->get()), *child_ptr(child_uptr.get());
+
+  // reset parent
+  if (child_uptr)
+    child_uptr->parent = (*self_uptr_ptr)->parent;
+  // remove the node
+  self_uptr_ptr->swap(child_uptr);
+
+  if (self_ptr->color == Red)
+    return;
+  if (child_ptr != NULL) {
+    assert(child_ptr->color == Red);
+    child_ptr->color = Black;
+    return;
+  }
+
+  while (true) {
+    // case 1: propagate black up
+    if (sibling_ptr->color == Black &&
+        ((!sibling_ptr->left && !sibling_ptr->right) ||
+         (sibling_ptr->left && sibling_ptr->left->color == Black &&
+          sibling_ptr->right && sibling_ptr->right->color == Black))) {
+      sibling_ptr->color = Red;
+      if (parent_ptr->color == Red) {
+        parent_ptr->color = Black;
+        break;
+      }
+      // reach root
+      if (parent_ptr->parent == NULL)
+        break;
+      // setup sibling_ptr and parent_ptr for next iteration
+      Node_ *gp_ptr(parent_ptr->parent);
+      if (gp_ptr->left.get() == parent_ptr) {
+        sibling_ptr = gp_ptr->right.get();
+        is_sibling_on_the_right = true;
+      } else {
+        sibling_ptr = gp_ptr->left.get();
+        is_sibling_on_the_right = false;
+      }
+      parent_ptr = gp_ptr;
+      continue;
+    }
+    assert(sibling_ptr != NULL);
+    if (is_sibling_on_the_right) {
+      // case 2: red sibling
+      if (sibling_ptr->color == Red) {
+        sibling_ptr->color = Black;
+        if (sibling_ptr->left)
+          sibling_ptr->left->color = Red;
+        rotate_left_(parent_ptr);
+        break;
+      }
+      // case 3: one red child on inner branch
+      if (sibling_ptr->left &&
+          (!sibling_ptr->right || sibling_ptr->right->color == Black)) {
+        sibling_ptr->color = Red;
+        sibling_ptr->left->color = Black;
+        rotate_right_(sibling_ptr);
+        sibling_ptr = sibling_ptr->parent;
+      }
+      // case 4: red child on the outer branch
+      std::swap(sibling_ptr->color, sibling_ptr->parent->color);
+      sibling_ptr->right->color = Black;
+      rotate_left_(sibling_ptr->parent);
+      break;
+    } else {
+      // case 2: red sibling
+      if (sibling_ptr->color == Red) {
+        sibling_ptr->color = Black;
+        if (sibling_ptr->right)
+          sibling_ptr->right->color = Red;
+        rotate_right_(parent_ptr);
+        break;
+      }
+      // case 3: one red child on inner branch
+      if (sibling_ptr->right &&
+          (!sibling_ptr->left || sibling_ptr->left->color == Black)) {
+        sibling_ptr->color = Red;
+        sibling_ptr->right->color = Black;
+        rotate_left_(sibling_ptr);
+        sibling_ptr = sibling_ptr->parent;
+      }
+      // case 4: red child on the outer branch
+      std::swap(sibling_ptr->color, sibling_ptr->parent->color);
+      sibling_ptr->left->color = Black;
+      rotate_right_(sibling_ptr->parent);
+      break;
+    }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
 std::string RBTree<DataType>::to_string() const
 {
   if (!m_root)
@@ -227,7 +379,7 @@ std::string RBTree<DataType>::to_string() const
       assert(pn.offset >= current_offset);
       if (pn.offset > current_offset)
         ss << std::string((pn.offset - current_offset) * half_print_width, ' ');
-      ss << std::setw(2 * half_print_width - 2) << pn.data 
+      ss << std::setw(2 * half_print_width - 2) << pn.data
          << ',' << pn.color_code;
       current_offset = pn.offset + 2;
     }
@@ -265,7 +417,7 @@ bool RBTree<DataType>::check_rbtree_invariances() const
     if (ptr->color == Black)
       ++tmp_height;
   }
-  if (checkpoint_height != tmp_height)
+  if (checkpoint_height != -1 && checkpoint_height != tmp_height)
     return false;
   const int black_height(tmp_height);
   // second, compare other heights with this one
@@ -390,6 +542,62 @@ void RBTree<DataType>::rotate_right_(Node_ *ptr)
       uptr_ptr = &parent->right;
   }
   uptr_ptr->swap(left_ptr->right);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+typename RBTree<DataType>::Node_ *
+RBTree<DataType>::find_predecessor(Node_ *ptr) const
+{
+  if (!ptr->left)
+    return NULL;
+  ptr = ptr->left.get();
+  while (ptr->right)
+    ptr = ptr->right.get();
+  return ptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+typename RBTree<DataType>::Node_ *
+RBTree<DataType>::find_successor(Node_ *ptr) const
+{
+  if (!ptr->right)
+    return NULL;
+  ptr = ptr->right.get();
+  while (ptr->left)
+    ptr = ptr->left.get();
+  return ptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+void RBTree<DataType>::swap_nodes_(Node_ *lhs_ptr, Node_ *rhs_ptr)
+{
+  Node_ *lhs_parent(lhs_ptr->parent), *rhs_parent(rhs_ptr->parent);
+  UPtr_ *lhs_uptr_ptr(NULL), *rhs_uptr_ptr(NULL);
+  if (lhs_parent != NULL) {
+    if (lhs_parent->left.get() == lhs_ptr)
+      lhs_uptr_ptr = &lhs_parent->left;
+    else
+      lhs_uptr_ptr = &lhs_parent->right;
+  }
+  if (rhs_parent != NULL) {
+    if (rhs_parent->left.get() == rhs_ptr)
+      rhs_uptr_ptr = &rhs_parent->left;
+    else
+      rhs_uptr_ptr = &rhs_parent->right;
+  }
+  if (lhs_uptr_ptr == NULL)
+    m_root.swap(*rhs_uptr_ptr);
+  else if (rhs_uptr_ptr == NULL)
+    m_root.swap(*lhs_uptr_ptr);
+  else
+    rhs_uptr_ptr->swap(*lhs_uptr_ptr);
+  lhs_ptr->swap(*rhs_ptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
