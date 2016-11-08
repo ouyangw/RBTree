@@ -29,6 +29,21 @@ int main()
     std::cout << "Tree is broken!\n";
 
   for (int i(0); i < 100; ++i) {
+    if (!tree.find(i))
+      std::cout << "Error: cannot find " << i << '\n';
+  }
+
+  for (int i(100); i < 200; ++i) {
+    if (tree.find(i))
+      std::cout << "Error: found " << i << '\n';
+  }
+
+  for (int i(-100); i < 0; ++i) {
+    if (tree.find(i))
+      std::cout << "Error: found " << i << '\n';
+  }
+
+  for (int i(0); i < 100; ++i) {
     tree.remove(i);
 //    std::cout << tree.to_string() << '\n';
     if (!tree.check_rbtree_invariances())
