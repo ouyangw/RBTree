@@ -26,6 +26,8 @@ public:
   void insert(const DataType &data);
   // remove data
   void remove(const DataType &data);
+  // find if the data is in the tree
+  bool find(const DataType &data) const;
   // print the data to string
   std::string to_string() const;
   // check red black tree invariances (just for debugging)
@@ -315,6 +317,18 @@ void RBTree<DataType>::remove(const DataType &data)
       break;
     }
   }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename DataType>
+bool RBTree<DataType>::find(const DataType &data) const
+{
+  Node_ *ptr(find_insert_parent_(data));
+  if (ptr->data == data)
+    return true;
+  else
+    return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
